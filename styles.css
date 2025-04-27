@@ -1,0 +1,263 @@
+/* Estilos para a aplicação */
+:root {
+    --primary-color: #28a745; /* Verde como cor principal */
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f5f5;
+    color: #333;
+}
+
+/* Estilos para o login */
+.login-card {
+    max-width: 450px;
+    width: 100%;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.login-card .card-header {
+    border-radius: 0.25rem 0.25rem 0 0;
+    background-color: var(--primary-color);
+}
+
+/* Estilos para a guia */
+.guia-container {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+    /* Dimensões A4 */
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    position: relative;
+}
+
+.guia-header {
+    margin-bottom: 20px;
+}
+
+.guia-body {
+    font-size: 0.9rem;
+}
+
+.assinatura-box {
+    border-top: 1px solid #ddd;
+    padding-top: 10px;
+    margin-top: 50px;
+    text-align: center;
+}
+
+/* Estilos para tabelas */
+.table th {
+    background-color: #f8f9fa;
+}
+
+.table-bordered th,
+.table-bordered td {
+    border-color: #dee2e6;
+}
+
+/* Estilos para formulários */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.25rem rgba(40, 167, 69, 0.25);
+}
+
+/* Estilos para botões */
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+.btn-outline-primary {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Estilos para o painel de configuração */
+#config-panel {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+/* Estilos para o botão de configuração */
+#btn-config {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* Estilos para o painel de administração */
+.nav-tabs .nav-link {
+    color: var(--secondary-color);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+/* Navbar com tema verde */
+.navbar-dark.bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+/* Estilos responsivos */
+@media (max-width: 768px) {
+    .guia-container {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .guia-body {
+        font-size: 0.8rem;
+    }
+    
+    .table {
+        font-size: 0.8rem;
+    }
+}
+
+/* Animações */
+.fade-in {
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Estilos para impressão */
+@media print {
+    body {
+        background-color: white;
+    }
+    
+    .guia-container {
+        box-shadow: none;
+        padding: 0;
+        width: 210mm;
+        height: 297mm;
+    }
+    
+    .no-print {
+        display: none !important;
+    }
+    
+    .page-break {
+        page-break-before: always;
+    }
+}
+
+/* Estilos para toast */
+.toast-container {
+    z-index: 1060;
+}
+
+/* Estilos para checkboxes */
+.form-check-input:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* Estilos para badges */
+.badge {
+    font-weight: 500;
+}
+
+.badge.bg-success {
+    background-color: var(--primary-color) !important;
+}
+
+/* Estilos para modais */
+.modal-header {
+    background-color: var(--light-color);
+    border-bottom: 1px solid #dee2e6;
+}
+
+.modal-footer {
+    background-color: var(--light-color);
+    border-top: 1px solid #dee2e6;
+}
+
+/* Estilos para o service worker */
+.offline-message {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background-color: var(--warning-color);
+    color: #333;
+    padding: 10px 15px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 1070;
+}
+
+/* Estilos para o botão de instalação PWA */
+#install-button {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1050;
+    padding: 10px 15px;
+    border-radius: 5px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+}
+
+#install-button:hover {
+    background-color: #218838;
+}
+
+/* Estilos para o botão de voltar ao topo */
+#back-to-top {
+    display: none;
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    z-index: 1050;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#back-to-top:hover {
+    background-color: #218838;
+}

@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sistema de Guia de Encaminhamento</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Bibliotecas necessárias -->
+    <script src="https://unpkg.com/dexie@3.2.2/dist/dexie.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Registro do Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/service-worker.js')
+                .then(function(registration) {
+                    console.log('Service Worker registrado com sucesso:', registration.scope);
+                })
+                .catch(function(error) {
+                    console.log('Falha ao registrar o Service Worker:', error);
+                });
+            });
+        }
+        
+        // Função para exibir mensagens toast
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                const container = document.createElement('div');
+                container.id = 'toast-container';
+                container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+                document.body.appendChild(container);
+            }
+            
+            const toastId = 'toast-' + Date.now();
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-white bg-${type} border-0`;
+            toast.id = toastId;
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+            
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar"></button>
+                </div>
+            `;
+            
+            document.getElementById('toast-container').appendChild(toast);
+            
+            const bsToast = new bootstrap.Toast(toast, {
+                autohide: true,
+                delay: 5000
+            });
+            
+            bsToast.show();
+            
+            toast.addEventListener('hidden.bs.toast', function () {
+                toast.remove();
+            });
+        }
+    </script>
+</head>
+<body>
+    <!-- Container de Login -->
+    <div id="loginContainer" class="container d-flex justify-content-center align-items-center vh-100">
+        <div class="card login-card">
+            <div class="card-header text-white text-center py-3">
+                <h4 class="mb-0">Sistema de Guia de Encaminhamento</h4>
+            </div>
+            <div class="card-body p-4">
+                <form id="formLogin">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Usuário</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-user"></i></span>
+                            <input type="text" class="form-control" id="username" placeholder="Digite seu usuário" required>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="password" class="form-label">Senha</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                            <input type="password" class="form-control" id="password" placeholder="Digite sua senha" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 py-2">Entrar</button>
+                </form>
+            </div>
+            <div class="card-footer text-center py-3">
+                <small class="text-muted">© 2025 Sistema de Guia de Encaminhamento</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container Principal -->
+    <div id="mainContainer" class="d-none">
+        <!-- Navbar -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">Guia de Encaminhamento</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link active" data-target="form" href="#">Formulário</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-target="historico" href="#">Histórico</a>
+                        </li>
+                        <li class="nav-item" id="adminNav" style="display: none;">
+                            <a class="nav-link" data-target="admin" href="#">Administração</a>
+                        </li>
+                    </ul>
+                    <div class="d-flex align-items-center">
+                        <span class="text-white me-3">Olá, <span id="currentUser">Usuário</span></span>
+                        <button id="btnLogout" class="btn btn-outline-light btn-sm">
+                            <i class="fas fa-sign-out-alt me-1"></i> Sair
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Conteúdo Principal -->
+        <div class="container mt-4">
+            <!-- Seção de Formulário -->
+            <div id="section-form" class="content-section">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Formulário de Guia de Encaminhamento</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="formGuia">
+                            <div class="row">
+                                <div class="col-md-8 mb-3">
+                                    <label for="nome" class="form-label">Nome do Colaborador *</label>
+                                    <input type="text" class="form-control" id="nome" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="sexo" class="form-label">Sexo</label>
+                                    <select class="form-select" id="sexo">
+                                        <option value="">Selecione</option>
+                                        <option value="Masculino">Masculino</option>
+                                        <option value="Feminino">Feminino</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="cpf" class="form-label">CPF *</label>
+                                    <input type="text" class="form-control" id="cpf" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="rg" class="form-label">RG</label>
+                                    <input type="text" class="form-control" id="rg">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="dataNascimento" class="form-label">Data de Nascimento</label>
+                                    <input type="date" class="form-control" id="dataNascimento">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="funcao" class="form-label">Função *</label>
+                                    <select class="form-select" id="funcao" required>
+                                        <option value="">Selecione uma função</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="setor" class="form-label">Setor</label>
+                                    <input type="text" class="form-control" id="setor">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="dataAdmissao" class="form-label">Data de Admissão</label>
+                                    <input type="date" class="form-control" id="dataAdmissao">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-8 mb-3">
+                                    <label for="obra" class="form-label">Obra/Local</label>
+                                    <input type="text" class="form-control" id="obra">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="matricula" class="form-label">Matrícula</label>
+                                    <input type="text" class="form-control" id="matricula">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label for="tipoExame" class="form-label">Tipo de Exame *</label>
+                                    <select class="form-select" id="tipoExame" required>
+                                        <option value="">Selecione um tipo de exame</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <h5>Exames</h5>
+                                    <div id="examesContainer" class="mt-3">
+                                        <p class="text-center">Selecione uma função e um tipo de exame</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h5>Riscos Ocupacionais</h5>
+                                    <div id="riscosContainer" class="mt-3">
+                                        <p class="text-center">Selecione uma função e um tipo de exame</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-4">
+                                <button type="button" id="btnLimparForm" class="btn btn-secondary">
+                                    <i class="fas fa-eraser me-1"></i> Limpar
+                                </button>
+                                <div>
+                                    <button type="button" id="btnPrevisualizar" class="btn btn-info me-2">
+                                        <i class="fas fa-eye me-1"></i> Pré-visualizar
+                                    </button>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-file-medical me-1"></i> Preencher Guia
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seção de Histórico -->
+            <div id="section-historico" class="content-section" style="display: none;">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Histórico de Guias</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>CPF</th>
+                                        <th>Função</th>
+                                        <th>Tipo de Exame</th>
+                                        <th>Data</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyHistorico">
+                                    <tr>
+                                        <td colspan="6" class="text-center">Carregando...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seção de Administração -->
+            <div id="section-admin" class="content-section" style="display: none;">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Administração do Sistema</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link active" id="funcoes-tab" data-bs-toggle="tab" href="#tab-funcoes" role="tab" aria-controls="tab-funcoes" aria-selected="true">Funções</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" id="tipos-exame-tab" data-bs-toggle="tab" href="#tab-tipos-exame" role="tab" aria-controls="tab-tipos-exame" aria-selected="false">Tipos de Exame</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" id="exames-tab" data-bs-toggle="tab" href="#tab-exames" role="tab" aria-controls="tab-exames" aria-selected="false">Exames</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" id="riscos-tab" data-bs-toggle="tab" href="#tab-riscos" role="tab" aria-controls="tab-riscos" aria-selected="false">Riscos</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" id="mapeamento-tab" data-bs-toggle="tab" href="#tab-mapeamento" role="tab" aria-controls="tab-mapeamento" aria-selected="false">Mapeamento</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" id="usuarios-tab" data-bs-toggle="tab" href="#tab-usuarios" role="tab" aria-controls="tab-usuarios" aria-selected="false">Usuários</a>
+                            </li>
+                        </ul>
+                        <div class="tab-content p-3 border border-top-0 rounded-bottom" id="adminTabsContent">
+                            <!-- Tab Funções -->
+                            <div class="tab-pane fade show active" id="tab-funcoes" role="tabpanel" aria-labelledby="funcoes-tab">
+                                <div class="d-flex justify-content-between mb-3">
+                                    <h5>Gerenciamento de Funções</h5>
+                                    <button id="btnNovaFuncao" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-plus me-1"></i> Nova Função
+                                    </button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Nome</th>
+                                                <th>Descrição</th>
+                                                <th>Status</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyFuncoes">
+                                            <tr>
+                                                <td colspan="4" class="text-center">Carregando...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Tipos de Exame -->
+                            <div class="tab-pane fade" id="tab-tipos-exame" role="tabpanel" aria-labelledby="tipos-exame-tab">
+                                <div class="d-flex justify-content-between mb-3">
+                                    <h5>Gerenciamento de Tipos de Exame</h5>
+                                    <button id="btnNovoTipoExame" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-plus me-1"></i> Novo Tipo de Exame
+                                    </button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Nome</th>
+                                                <th>Descrição</th>
+                                                <th>Status</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyTiposExame">
+                                            <tr>
+                                                <td colspan="4" class="text-center">Carregando...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Exames -->
+                            <div class="tab-pane fade" id="tab-exames" role="tabpanel" aria-labelledby="exames-tab">
+                                <div class="d-flex justify-content-between mb-3">
+                                    <h5>Gerenciamento de Exames</h5>
+                                    <button id="btnNovoExame" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-plus me-1"></i> Novo Exame
+                                    </button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Nome</th>
+                                                <th>Recomendação</th>
+                                                <th>Status</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyExames">
+                                            <tr>
+                                                <td colspan="4" class="text-center">Carregando...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Riscos -->
+                            <div class="tab-pane fade" id="tab-riscos" role="tabpanel" aria-labelledby="riscos-tab">
+                                <div class="d-flex justify-content-between mb-3">
+                                    <h5>Gerenciamento de Riscos</h5>
+                                    <button id="btnNovoRisco" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-plus me-1"></i> Novo Risco
+                                    </button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Tipo</th>
+                                                <th>Descrição</th>
+                                                <th>Status</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyRiscos">
+                                            <tr>
+                                                <td colspan="4" class="text-center">Carregando...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Mapeamento -->
+                            <div class="tab-pane fade" id="tab-mapeamento" role="tabpanel" aria-labelledby="mapeamento-tab">
+                                <h5 class="mb-3">Mapeamento de Funções, Tipos de Exame, Exames e Riscos</h5>
+                                <div class="row mb-4">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="selectFuncaoMapeamento" class="form-label">Função</label>
+                                        <select class="form-select" id="selectFuncaoMapeamento">
+                                            <option value="">Selecione uma função</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="selectTipoExameMapeamento" class="form-label">Tipo de Exame</label>
+                                        <select class="form-select" id="selectTipoExameMapeamento">
+                                            <option value="">Selecione um tipo de exame</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <h6>Exames</h6>
+                                        <div id="checkboxesExames" class="mt-2">
+                                            <p class="text-center">Selecione uma função e um tipo de exame</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <h6>Riscos Ocupacionais</h6>
+                                        <div id="checkboxesRiscos" class="mt-2">
+                                            <p class="text-center">Selecione uma função e um tipo de exame</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-end mt-3">
+                                    <button id="btnSalvarMapeamento" class="btn btn-primary">
+                                        <i class="fas fa-save me-1"></i> Salvar Mapeamento
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Usuários -->
+                            <div class="tab-pane fade" id="tab-usuarios" role="tabpanel" aria-labelledby="usuarios-tab">
+                                <div class="d-flex justify-content-between mb-3">
+                                    <h5>Gerenciamento de Usuários</h5>
+                                    <button id="btnNovoUsuario" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-plus me-1"></i> Novo Usuário
+                                    </button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Nome</th>
+                                                <th>Usuário</th>
+                                                <th>E-mail</th>
+                                                <th>Tipo</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyUsuarios">
+                                            <tr>
+                                                <td colspan="5" class="text-center">Carregando...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botão de Configuração -->
+        <button id="btn-config" class="btn btn-primary rounded-circle position-fixed bottom-0 end-0 m-4" data-bs-toggle="tooltip" data-bs-placement="left" title="Configurações">
+            <i class="fas fa-cog"></i>
+        </button>
+
+        <!-- Painel de Configuração -->
+        <div id="config-panel" class="position-fixed bottom-0 end-0 m-4 mb-5 p-3 bg-white rounded shadow d-none" style="width: 350px; z-index: 1000;">
+            <h5 class="mb-3">Configurações da Empresa</h5>
+            <form id="formConfig">
+                <div class="mb-2">
+                    <label for="empresaNome" class="form-label">Nome da Empresa *</label>
+                    <input type="text" class="form-control" id="empresaNome" required>
+                </div>
+                <div class="mb-2">
+                    <label for="empresaCnpj" class="form-label">CNPJ *</label>
+                    <input type="text" class="form-control" id="empresaCnpj" required>
+                </div>
+                <div class="mb-2">
+                    <label for="empresaTelefone" class="form-label">Telefone</label>
+                    <input type="text" class="form-control" id="empresaTelefone">
+                </div>
+                <div class="mb-2">
+                    <label for="empresaEmail" class="form-label">E-mail</label>
+                    <input type="email" class="form-control" id="empresaEmail">
+                </div>
+                <div class="mb-2">
+                    <label for="empresaEndereco" class="form-label">Endereço</label>
+                    <input type="text" class="form-control" id="empresaEndereco">
+                </div>
+                <hr>
+                <h6 class="mb-2">Médico Coordenador do PCMSO</h6>
+                <div class="mb-2">
+                    <label for="medicoNome" class="form-label">Nome</label>
+                    <input type="text" class="form-control" id="medicoNome">
+                </div>
+                <div class="mb-2">
+                    <label for="medicoCrm" class="form-label">CRM</label>
+                    <input type="text" class="form-control" id="medicoCrm">
+                </div>
+                <div class="d-flex justify-content-end mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Função -->
+    <div class="modal fade" id="modalFuncao" tabindex="-1" aria-labelledby="modalFuncaoLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalFuncaoLabel">Nova Função</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formFuncao">
+                        <div class="mb-3">
+                            <label for="funcaoNome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="funcaoNome" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="funcaoDescricao" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="funcaoDescricao" rows="3"></textarea>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="funcaoAtiva" checked>
+                            <label class="form-check-label" for="funcaoAtiva">
+                                Função ativa
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="formFuncao" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Tipo de Exame -->
+    <div class="modal fade" id="modalTipoExame" tabindex="-1" aria-labelledby="modalTipoExameLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTipoExameLabel">Novo Tipo de Exame</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formTipoExame">
+                        <div class="mb-3">
+                            <label for="tipoExameNome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="tipoExameNome" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="tipoExameDescricao" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="tipoExameDescricao" rows="3"></textarea>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="tipoExameAtivo" checked>
+                            <label class="form-check-label" for="tipoExameAtivo">
+                                Tipo de exame ativo
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="formTipoExame" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Exame -->
+    <div class="modal fade" id="modalExame" tabindex="-1" aria-labelledby="modalExameLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalExameLabel">Novo Exame</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formExame">
+                        <div class="mb-3">
+                            <label for="exameNome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="exameNome" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="exameRecomendacao" class="form-label">Recomendação</label>
+                            <textarea class="form-control" id="exameRecomendacao" rows="3"></textarea>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="exameAtivo" checked>
+                            <label class="form-check-label" for="exameAtivo">
+                                Exame ativo
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="formExame" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Risco -->
+    <div class="modal fade" id="modalRisco" tabindex="-1" aria-labelledby="modalRiscoLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalRiscoLabel">Novo Risco</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formRisco">
+                        <div class="mb-3">
+                            <label for="riscoTipo" class="form-label">Tipo *</label>
+                            <select class="form-select" id="riscoTipo" required>
+                                <option value="">Selecione</option>
+                                <option value="fisico">Físico</option>
+                                <option value="quimico">Químico</option>
+                                <option value="biologico">Biológico</option>
+                                <option value="ergonomico">Ergonômico</option>
+                                <option value="acidentes">Acidentes</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="riscoDescricao" class="form-label">Descrição *</label>
+                            <textarea class="form-control" id="riscoDescricao" rows="3" required></textarea>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="riscoAtivo" checked>
+                            <label class="form-check-label" for="riscoAtivo">
+                                Risco ativo
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="formRisco" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Usuário -->
+    <div class="modal fade" id="modalUsuario" tabindex="-1" aria-labelledby="modalUsuarioLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalUsuarioLabel">Novo Usuário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formUsuario">
+                        <div class="mb-3">
+                            <label for="usuarioNome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="usuarioNome" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="usuarioUsername" class="form-label">Usuário *</label>
+                            <input type="text" class="form-control" id="usuarioUsername" required>
+                        </div>
+                        <div class="mb-3" id="senhaGroup">
+                            <label for="usuarioSenha" class="form-label">Senha *</label>
+                            <input type="password" class="form-control" id="usuarioSenha">
+                        </div>
+                        <div class="mb-3">
+                            <label for="usuarioEmail" class="form-label">E-mail *</label>
+                            <input type="email" class="form-control" id="usuarioEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="usuarioTipo" class="form-label">Tipo *</label>
+                            <select class="form-select" id="usuarioTipo" required>
+                                <option value="">Selecione</option>
+                                <option value="usuario">Usuário</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="formUsuario" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Pré-visualização -->
+    <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="previewModalLabel">Pré-visualização da Guia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="guia-preview"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary" onclick="generatePDF(null)">
+                        <i class="fas fa-file-pdf me-1"></i> Gerar PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container de Toast -->
+    <div id="toast-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1060;"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://unpkg.com/dexie@3.2.2/dist/dexie.js"></script>
+    <script src="db.js"></script>
+    <script src="auth.js"></script>
+    <script src="admin.js"></script>
+    <script src="pdf.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Registrar Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker registrado com sucesso:', registration);
+                    })
+                    .catch(error => {
+                        console.log('Falha ao registrar Service Worker:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

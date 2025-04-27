@@ -1,0 +1,23 @@
+{
+  "name": "Sistema de Guia de Encaminhamento",
+  "short_name": "Guia Encaminhamento",
+  "description": "Sistema para geração de guias de encaminhamento médico",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#28a745",
+  "theme_color": "#28a745",
+  "icons": [
+    {
+      "src": "icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
